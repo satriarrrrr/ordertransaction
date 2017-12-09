@@ -10,8 +10,13 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/satriarrrrr/store/helpers"
+	"github.com/satriarrrrr/store/products"
+	"goji.io/pat"
+
 	"github.com/satriarrrrr/store/infrastructures"
 	"github.com/spf13/viper"
+	"goji.io"
 )
 
 var (
@@ -48,13 +53,28 @@ func main() {
 	signal.Notify(quit, os.Interrupt)
 
 	// Initialize service
+	productRepository := products.NewProductsRepository(db)
+	productService := products.NewProductsService(logger, productRepository)
+	productController := products.NewProductsController(productService)
 
 	// Routing
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/text")
-		w.Write([]byte("Hello, world!"))
+	mux := goji.NewMux()
+	mux.HandleFunc(pat.Get("/"), func(w http.ResponseWriter, r *http.Request) {
+		helpers.ResponseJSON(w, "Hello, world!", 1000, 200)
 	})
+	mux.HandleFunc(pat.Get("/healthcheck"), func(w http.ResponseWriter, r *http.Request) {
+		helpers.ResponseJSON(w, "Ok!", 1000, 200)
+	})
+	mux.HandleFunc(pat.Get("/ping"), func(w http.ResponseWriter, r *http.Request) {
+		if err = db.Ping(); err != nil {
+			helpers.ResponseJSON(w, "Failed!", 1000, 200)
+		} else {
+			helpers.ResponseJSON(w, "Pong", 1000, 200)
+		}
+	})
+
+	mux.HandleFunc(pat.Get("/products"), productController.GetProducts)
+	mux.HandleFunc(pat.Get("/products/:id"), productController.GetProductByID)
 
 	// Run server
 	s := &http.Server{
